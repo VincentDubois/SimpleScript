@@ -89,6 +89,16 @@ public class Script {
 			return TYPE.OTHER;
 		}
 
+		/**
+		 * Convert object to int.
+		 * 
+		 * null value is 0.
+		 * boolean value is O or 1 (resp. false or true).
+		 * string value is parsed to int.
+		 * 
+		 * @param o
+		 * @return
+		 */
 		public static int asInt(Object o){
 			if (o == null) return 0;
 			if (o instanceof Integer) return (Integer) o;
@@ -96,6 +106,16 @@ public class Script {
 			return Integer.parseInt(o.toString());
 		}
 
+		/**
+		 * Convert object to boolean
+		 * 
+		 * null value is false.
+		 * integer value is false if and only if it is 0
+		 * string value is always true.
+		 * 
+		 * @param o
+		 * @return
+		 */
 		public static boolean asBool(Object o){
 			if (o == null) return false;
 			if (o instanceof Boolean) return ((Boolean) o);
@@ -103,6 +123,19 @@ public class Script {
 			return true;
 		}
 
+
+		/**
+		 * Compare 2 string, int or boolean.
+		 * 
+		 * null is less than everything else.
+		 * If one parameter is a string, the other is promoted to string.
+		 * Else, if one parameter is an int the other is promoted to int.
+		 * false is less than true
+		 * 
+		 * @param a
+		 * @param b
+		 * @return
+		 */
 		public static int compare(Object a, Object b){
 			if (a == null && b == null) {
 				return 0;
@@ -165,7 +198,7 @@ public class Script {
 			 * @param t expected type
 			 * @return true if type matches. If true, advance to next character
 			 */
-			boolean accept(TYPE t){
+			private boolean accept(TYPE t){
 				if (!check(t)) return false;
 				consume();
 				return true;
@@ -174,9 +207,9 @@ public class Script {
 			/**
 			 * Check current and next character types, and consumes both if they match. 
 			 * @param t expected type
-			 * @return true if types match. If true, advance two character
+			 * @return true if types match. If true, advance two characters
 			 */
-			boolean accept(TYPE t1, TYPE t2){
+			private boolean accept(TYPE t1, TYPE t2){
 				if (!check(t1)) return false;
 				if (!checkNext(t2)) return false;
 				consume();consume();
@@ -212,7 +245,7 @@ public class Script {
 			 * Advance to the first character after the name.
 			 * @return variable name
 			 */
-			String readIdent(){
+			private String readIdent(){
 				globbleSpace();
 				int start = current;
 				if (!accept(TYPE.LETTER)) return null;
@@ -229,7 +262,7 @@ public class Script {
 			 * a sign character.
 			 * @return parsed integer value
 			 */
-			int readNumber(){
+			private int readNumber(){
 				globbleSpace();
 				int start = current;
 				if (accept(TYPE.OP_MINUS) || accept(TYPE.OP_PLUS));
@@ -244,7 +277,7 @@ public class Script {
 			 * Read one integer variable, value or expression.
 			 * 
 			 * factor = [ '-' | '!' ]
-			 *  (   ident
+			 *  (  ['$'] ident
 			 *    | number
 			 *    | '(' statement ')'
 			 *    | string   ).
@@ -261,16 +294,16 @@ public class Script {
 				Object result = null;				
 
 				globbleSpace();
-				if (accept(TYPE.EVALUATE)){
+				if (accept(TYPE.EVALUATE)){ // interprets variable as a program
 					result = evaluate(String.valueOf((get(readIdent()))));					
-				} else if (check(TYPE.LETTER)) {
+				} else if (check(TYPE.LETTER)) { // get variable value
 					result =  get(readIdent());
-				} else if (accept(TYPE.L_PAR)) {
+				} else if (accept(TYPE.L_PAR)) { // handle parenthesis 
 					result = readStatement();
 					globbleSpace();
 					accept(TYPE.R_PAR);
 					globbleSpace();
-				} else if(check(TYPE.QUOTE)|| check(TYPE.SIMPLE_QUOTE)){ 
+				} else if(check(TYPE.QUOTE)|| check(TYPE.SIMPLE_QUOTE)){ // handle string litteral 
 					result = readString();										
 				} else {
 					result = readNumber();
@@ -293,15 +326,15 @@ public class Script {
 				String result = "";				
 				globbleSpace();
 				int start;
-				if (accept(TYPE.QUOTE)){ 
+				if (accept(TYPE.QUOTE)){ // double quote allows inner $expressions$ evaluation.
 					start = current;
 					while(!accept(TYPE.QUOTE)) {
-						if(accept(TYPE.EVALUATE)){
-							result += string.substring(start,current-1);
-							result += String.valueOf(readProgram());
+						if(accept(TYPE.EVALUATE)){ 
+							result += string.substring(start,current-1); //ends and adds current string
+							result += String.valueOf(readProgram()); //evaluate program
 							globbleSpace();
 							accept(TYPE.EVALUATE);
-							start = current;						
+							start = current;		                 // resume string literal				
 						} else {
 							consume();						
 						}
@@ -310,9 +343,8 @@ public class Script {
 					accept(TYPE.SIMPLE_QUOTE);
 					start = current;
 					while(!accept(TYPE.SIMPLE_QUOTE)) consume();						
-
 				}
-				result += string.substring(start,current-1);
+				result += string.substring(start,current-1); //litteral ends
 				globbleSpace();
 
 				return result;
@@ -320,15 +352,13 @@ public class Script {
 
 
 			/**
-			 * Compute and consume a product of factors.
-			 * 
+			 * Read a product of factors.
 			 * 
 			 * term = factor { ( '*' | '/' ) factor } .
 			 * 
-			 * 
 			 * @return Computed value
 			 */
-			Object readTerm(){
+			private Object readTerm(){
 				globbleSpace();
 				Object result = readFactor();
 				while(true){
@@ -345,7 +375,7 @@ public class Script {
 			}
 
 			/**
-			 * Compute and consume an expression.
+			 * Performs or operation on boolean expressions.
 			 * 
 			 * expression = bool { '|' bool } .
 			 * 
@@ -366,6 +396,7 @@ public class Script {
 			}
 
 			/**
+			 * Performs logical AND on operands
 			 * 
 			 * bool = test { '&' test } .
 			 * 
@@ -387,8 +418,10 @@ public class Script {
 
 
 			/**
+			 * Evaluate test
 			 * 
 			 * test = sum { ( '==' | '!=' | '<' | '>' | '<=' | '>=' sum } .   
+			 * @return
 			 */
 
 			private Object readTest() {
@@ -416,6 +449,8 @@ public class Script {
 			}
 
 			/**
+			 * Read a sum of terms
+			 * 
 			 * sum = term {('+' | '-' ) term } .
 			 * @return
 			 */
@@ -437,16 +472,18 @@ public class Script {
 					else {
 						return result;
 					}
-				}			}
+				}			
+			}
 
 
 			/**
-			 * Read, consume and execute a statement.
-			 * The statement is either an affectation, or an expression 
+			 * Read and execute a statement.
+			 * The statement is either an affectation, or an expression and may use
+			 * the ternary test operator
 			 * 
 			 * statement = [ident '=' ] expression ['?' expression ':' expression] .
 			 *  
-			 * @return Computed value. Actual type is either String or Integer
+			 * @return Computed value.
 			 */		
 			private Object readStatement() {
 				globbleSpace();
@@ -454,13 +491,13 @@ public class Script {
 				String ident = null;
 				Object value = null;
 
-				// Looking for assignation.
-				// if successful, ident contains the target variable ;
+				// Looking for affectation.
+				// if successful, ident contains the target variable name ;
 				// if not, ident revert to null and we backtrack
 				if (check(TYPE.LETTER)){
 					ident = readIdent();				
-					if (! accept(TYPE.EGAL) || accept(TYPE.EGAL)){ //no = or two =
-						// this is not an affectation
+					if ( accept(TYPE.EGAL,TYPE.EGAL) || !accept(TYPE.EGAL)){ // == or not = at all						
+						// -> this is not an affectation
 						ident = null;
 						current = start; //backtracking...
 					}				
@@ -482,9 +519,10 @@ public class Script {
 
 			/**
 			 * Execute a program.
-			 * the program is composed of semicolon separated statements
-			 *  
-			 * @return  Last statement value. Actual type is either String or Integer
+			 * 
+			 * The program is composed of semicolon separated statements.
+			 *   
+			 * @return  Last statement value. Actual type is either String, Integer or Boolean.
 			 */	
 			Object readProgram(){
 				Object result;
@@ -505,9 +543,15 @@ public class Script {
 		private Map<String,Object> var;
 
 
-		// Constructor	
-		Script(){
+		// Constructors
+		
+		
+		public Script(){
 			var = new HashMap();
+		}
+
+		public Script(Map<String,Object> varMap){
+			var = new HashMap(varMap);
 		}
 
 
@@ -521,16 +565,30 @@ public class Script {
 			return var.put(name, value);
 		}
 
+		public Map<String,Object> getVarMap(){
+			return var;
+		}
+		
+		public void clear(){
+			var.clear();
+		}
+
+		public void putAll(Map<String,Object> map){
+			var.putAll(map);
+		}
+
 		// Typed access to variables
 
 		public String getString(String name){
-			return var.get(name).toString();
+			return String.valueOf(var.get(name));
 		}
 
 		public int getInt(String name){
-			Object result = var.get(name);
-			if (result instanceof Integer) return (Integer) result;
-			else return Integer.parseInt(result.toString());
+			return asInt(get(name));
+		}
+
+		public boolean getBool(String name){
+			return asBool(get(name));
 		}
 
 		// Command evaluation
