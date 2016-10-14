@@ -207,7 +207,8 @@ public class Script {
 
 			/**
 			 * Check current and next character types, and consumes both if they match. 
-			 * @param t expected type
+			 * @param t1 expected first type
+			 * @param t2 expected second type
 			 * @return true if types match. If true, advance two characters
 			 */
 			private boolean accept(TYPE t1, TYPE t2){
