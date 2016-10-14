@@ -563,6 +563,12 @@ public class Script {
 			var = new HashMap<String, Object>();
 		}
 
+		public Script(String command){
+			var = new HashMap<String, Object>();
+			evaluate(command);
+		}
+		
+		
 		public Script(Map<String,Object> varMap){
 			var = new HashMap<String, Object>(varMap);
 		}
@@ -582,6 +588,34 @@ public class Script {
 			return var;
 		}
 		
+		public String serialize(){
+			String result = "";
+			for(Map.Entry<String, Object> entry :  var.entrySet()){
+				if (!result.isEmpty()) result +=";"; 
+				result += entry.getKey() + "=";
+				Object value = entry.getValue();
+				if (value instanceof Integer){
+					result +=  value;
+				} else if (value instanceof Boolean){
+					result += ((Boolean) value) ? "1==1" : "1==0";
+				} else {
+					result += "'"+escape((String) value)+"'";
+				}
+			}
+			
+			
+			return result;
+		}
+		
+		private String escape(String s) {
+			String result ="";
+			for(int i = 0; i<s.length();++i){
+				char c = s.charAt(i);
+				result += (c == '\'') ? "\'" : c;
+			}
+			return result;
+		}
+
 		public void clear(){
 			var.clear();
 		}
@@ -697,7 +731,15 @@ public class Script {
 			test(script,"'$name$'","$name$");
 			test(script,"\"\\\'\"","\'");
 			test(script,"\'\\\'\'","'");
-
+			
+			String s = script.serialize();
+			
+			System.out.println(s);
+			
+			Script copy = new Script(s);
+			
+			System.out.println(script.getVarMap().equals(copy.getVarMap()));
+			
 		}
 }
 
