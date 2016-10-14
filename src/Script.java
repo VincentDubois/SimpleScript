@@ -50,7 +50,7 @@ public class Script {
 		OP_PLUS,OP_MINUS,OP_TIME,OP_DIVIDE,
 		OP_AND,OP_OR,OP_NEG,OP_TEST,OP_SELECT,
 		L_PAR,R_PAR,EVALUATE,
-		QUOTE,SIMPLE_QUOTE,SEMI_COLON,
+		QUOTE,SIMPLE_QUOTE,SEMI_COLON,ESCAPE,
 		EGAL,LT,GT,
 		OTHER,EOF};	
 
@@ -81,6 +81,7 @@ public class Script {
 			if (c=='"') return TYPE.QUOTE;
 			if (c=='\'') return TYPE.SIMPLE_QUOTE;
 			if (c==';') return TYPE.SEMI_COLON;
+			if (c=='\\') return TYPE.ESCAPE;
 
 			if (c=='=') return TYPE.EGAL;			
 			if (c=='<') return TYPE.LT;			
@@ -335,6 +336,10 @@ public class Script {
 							globbleSpace();
 							accept(TYPE.EVALUATE);
 							start = current;		                 // resume string literal				
+						} else if (accept(TYPE.ESCAPE)){
+							result += string.substring(start,current-1); //ends and adds current string
+							start = current; //next character is to be included
+							consume(); // and not parsed (because it is escaped)
 						} else {
 							consume();						
 						}
@@ -342,7 +347,15 @@ public class Script {
 				} else { // simple quote allows no evaluation
 					accept(TYPE.SIMPLE_QUOTE);
 					start = current;
-					while(!accept(TYPE.SIMPLE_QUOTE)) consume();						
+					while(!accept(TYPE.SIMPLE_QUOTE)) {
+						if (accept(TYPE.ESCAPE)){
+							result += string.substring(start,current-1); //ends and adds current string
+							start = current; //next character is to be included
+							consume(); // and not parsed (because it is escaped)
+						} else {
+							consume();
+						}
+					}
 				}
 				result += string.substring(start,current-1); //litteral ends
 				globbleSpace();
@@ -679,8 +692,11 @@ public class Script {
 					"bob drinks a potion, and now bob has 5 HP, and is alive.");
 			test(script,"\"value is 5$'$'$\"","value is 5$");
 			test(script,"\"value is 5\"+'$'","value is 5$");
+			test(script,"\"value is 5\\$\"","value is 5$");
 			test(script,"'value is 5$'","value is 5$");
 			test(script,"'$name$'","$name$");
+			test(script,"\"\\\'\"","\'");
+			test(script,"\'\\\'\'","'");
 
 		}
 }
