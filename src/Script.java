@@ -41,6 +41,8 @@ import java.util.Map;
  *  string =   
  *        ( '"' {^"$} {'$' program '$' {^"$} } '"' )
  *     | ''' {^'} '''  .
+ *     
+ *  In strings, any character can be escaped using \ 
  * 
  */
 public class Script {
@@ -179,9 +181,13 @@ public class Script {
 
 			/**
 			 * Skip one character.
+			 * @throws ParsingException 
 			 */
-			private void consume() {
+			private void consume() throws ParsingException {
 				++current;
+				if (current>string.length()){
+					error("Unexpected end of string");
+				}
 			}
 
 			/**
@@ -198,20 +204,43 @@ public class Script {
 			 * Check current character type, and consumes it if it matches. 
 			 * @param t expected type
 			 * @return true if type matches. If true, advance to next character
+			 * @throws ParsingException 
 			 */
-			private boolean accept(TYPE t){
+			private boolean accept(TYPE t) throws ParsingException{
 				if (!check(t)) return false;
 				consume();
 				return true;
 			}
+			
+			private void expect(TYPE t) throws ParsingException{
+				if (check(t)){
+					consume();
+					return;
+				}
+				error(t.toString()+ " expected, "+getTypeAt(current).toString()+
+						(check(TYPE.EOF) ? "" : string.charAt(current))+" found");
+				
+				
+			}
+
+			private void error(String message) throws ParsingException {
+				throw new ParsingException(string,current,message);
+				
+			}
+			
+			private void error(String message, Exception e) throws ParsingException {
+				throw new ParsingException(string,current,message,e);
+			}			
+
 
 			/**
 			 * Check current and next character types, and consumes both if they match. 
 			 * @param t1 expected first type
 			 * @param t2 expected second type
 			 * @return true if types match. If true, advance two characters
+			 * @throws ParsingException 
 			 */
-			private boolean accept(TYPE t1, TYPE t2){
+			private boolean accept(TYPE t1, TYPE t2) throws ParsingException{
 				if (!check(t1)) return false;
 				if (!checkNext(t2)) return false;
 				consume();consume();
@@ -236,7 +265,7 @@ public class Script {
 				return getTypeAt(current+1) == t;
 			}
 
-			private void globbleSpace(){
+			private void globbleSpace() throws ParsingException{
 				while (accept(TYPE.SPACE));
 			}
 
@@ -246,14 +275,15 @@ public class Script {
 			 * Name stars with a letter, and contains only letters and digit.
 			 * Advance to the first character after the name.
 			 * @return variable name
+			 * @throws ParsingException 
 			 */
-			private String readIdent(){
+			private String readIdent() throws ParsingException{
 				globbleSpace();
 				int start = current;
 				if (!accept(TYPE.LETTER)) return null;
 				while(accept(TYPE.LETTER) || accept(TYPE.DIGIT));
 				int end = current;
-				globbleSpace();
+				globbleSpace();				
 				return string.substring(start,end);
 			}
 
@@ -263,16 +293,26 @@ public class Script {
 			 * Read and consume a relative integer literal. The integer may begin with
 			 * a sign character.
 			 * @return parsed integer value
+			 * @throws ParsingException 
 			 */
-			private int readNumber(){
+			private int readNumber() throws ParsingException{
 				globbleSpace();
 				int start = current;
 				if (accept(TYPE.OP_MINUS) || accept(TYPE.OP_PLUS));
 				while(accept(TYPE.DIGIT));
 				int end = current;
 				globbleSpace();
-				return Integer.parseInt(string.substring(start,end));			
+				int parseInt = -1;
+				try {
+					parseInt = Integer.parseInt(string.substring(start,end));
+				} catch (NumberFormatException e){
+					error("Error parsing int value '"+string.substring(start,end)+"'",e);
+				}
+				return parseInt;			
 			}
+
+
+
 
 
 			/**
@@ -285,8 +325,9 @@ public class Script {
 			 *    | string   ).
 			 *    
 			 * @return Computed value
+			 * @throws ParsingException 
 			 */
-			private Object readFactor(){
+			private Object readFactor() throws ParsingException{
 
 				globbleSpace();
 
@@ -303,7 +344,7 @@ public class Script {
 				} else if (accept(TYPE.L_PAR)) { // handle parenthesis 
 					result = readStatement();
 					globbleSpace();
-					accept(TYPE.R_PAR);
+					expect(TYPE.R_PAR);
 					globbleSpace();
 				} else if(check(TYPE.QUOTE)|| check(TYPE.SIMPLE_QUOTE)){ // handle string litteral 
 					result = readString();										
@@ -322,8 +363,9 @@ public class Script {
 			 * Programs inside $$ are evaluated and replaced par resulting value			 * 
 			 * 
 			 *  string =    '"' {^"$} {'$' program '$' {^"$} } '"'
+			 * @throws ParsingException 
 			 */
-			private String readString() {
+			private String readString() throws ParsingException {
 				// TODO Auto-generated method stub
 				String result = "";				
 				globbleSpace();
@@ -335,7 +377,7 @@ public class Script {
 							result += string.substring(start,current-1); //ends and adds current string
 							result += String.valueOf(readProgram()); //evaluate program
 							globbleSpace();
-							accept(TYPE.EVALUATE);
+							expect(TYPE.EVALUATE);
 							start = current;		                 // resume string literal				
 						} else if (accept(TYPE.ESCAPE)){
 							result += string.substring(start,current-1); //ends and adds current string
@@ -371,8 +413,9 @@ public class Script {
 			 * term = factor { ( '*' | '/' ) factor } .
 			 * 
 			 * @return Computed value
+			 * @throws ParsingException 
 			 */
-			private Object readTerm(){
+			private Object readTerm() throws ParsingException{
 				globbleSpace();
 				Object result = readFactor();
 				while(true){
@@ -394,15 +437,17 @@ public class Script {
 			 * expression = bool { '|' bool } .
 			 * 
 			 * @return Computed value
+			 * @throws ParsingException 
 			 */
-			private Object readExpression() {
+			private Object readExpression() throws ParsingException {
 				globbleSpace();
 				Object result = readBool();
 
 				while(true){
 					globbleSpace();
 					if (accept(TYPE.OP_OR)){
-						result = asBool(result) || asBool(readBool());
+						Object readBool = readBool();
+						result = asBool(result) || asBool(readBool);
 					} else {
 						return result;
 					}				
@@ -415,15 +460,17 @@ public class Script {
 			 * bool = test { '&' test } .
 			 * 
 			 * @return
+			 * @throws ParsingException 
 			 */
-			private Object readBool() {
+			private Object readBool() throws ParsingException {
 				globbleSpace();
 				Object result = readTest();
 
 				while(true){
 					globbleSpace();
 					if (accept(TYPE.OP_AND)){
-						result = asBool(result) && asBool(readTest());
+						Object readTest = readTest();
+						result = asBool(result) && asBool(readTest);
 					} else {
 						return result;
 					}				
@@ -436,9 +483,10 @@ public class Script {
 			 * 
 			 * test = sum { ( '==' | '!=' | '<' | '>' | '<=' | '>=' sum } .   
 			 * @return
+			 * @throws ParsingException 
 			 */
 
-			private Object readTest() {
+			private Object readTest() throws ParsingException {
 				globbleSpace();
 				Object result = readSum();
 				while(true){
@@ -467,8 +515,9 @@ public class Script {
 			 * 
 			 * sum = term {('+' | '-' ) term } .
 			 * @return
+			 * @throws ParsingException 
 			 */
-			private Object readSum() {
+			private Object readSum() throws ParsingException {
 
 				globbleSpace();
 				Object result = readTerm();
@@ -498,8 +547,9 @@ public class Script {
 			 * statement = [ident '=' ] expression ['?' expression ':' expression] .
 			 *  
 			 * @return Computed value.
+			 * @throws ParsingException 
 			 */		
-			private Object readStatement() {
+			private Object readStatement() throws ParsingException {
 				globbleSpace();
 				int start = current; // Save position for backtracking purpose
 				String ident = null;
@@ -521,7 +571,7 @@ public class Script {
 
 				if (accept(TYPE.OP_TEST)){ //  ? : 
 					Object expression1 = readExpression();
-					accept(TYPE.OP_SELECT);
+					expect(TYPE.OP_SELECT);
 					Object expression2 = readExpression();
 					value =  asBool(value) ? expression1 : expression2;
 				}			
@@ -537,8 +587,9 @@ public class Script {
 			 * The program is composed of semicolon separated statements.
 			 *   
 			 * @return  Last statement value. Actual type is either String, Integer or Boolean.
+			 * @throws ParsingException 
 			 */	
-			Object readProgram(){
+			Object readProgram() throws ParsingException{
 				Object result;
 
 				result = readStatement();
@@ -552,6 +603,20 @@ public class Script {
 				}
 			}		
 		} 
+		
+		public static class ParsingException extends Exception {		
+			ParsingException(){
+				super();
+			}
+			
+			ParsingException(String s,int position, String description){
+				super(description+" (character " +position+") in \"" +s+"\"");
+			}
+			
+			ParsingException(String s,int position, String description,Throwable cause){
+				super(description+" (character " +position+") in \"" +s+"\"",cause);
+			}
+		}
 
 		//Variables store
 		private Map<String,Object> var;
@@ -564,9 +629,9 @@ public class Script {
 			var = new HashMap<String, Object>();
 		}
 
-		public Script(String command){
+		public Script(String command) {
 			var = new HashMap<String, Object>();
-			evaluate(command);
+			safeEvaluate(command);
 		}
 		
 		
@@ -641,31 +706,47 @@ public class Script {
 
 		// Command evaluation
 
-		public Object evaluate(String command) {
-			return new Parser(command).readProgram();
+		public Object evaluate(String command) throws ParsingException {		
+			Parser parser = new Parser(command);
+			Object result = parser.readProgram();
+			if (parser.current<parser.string.length()) parser.error("Incomplete parsing."); // TODO : make that a warning
+			return result;
 		}	
+		
+		public Object safeEvaluate(String command){
+			Object result = null;
+			try {
+				result = evaluate(command);
+			} catch (ParsingException e) {
+				e.printStackTrace();
+				result =  null;
+			}
+			return result;
+		}
 
-		public void printAndExecute(String command){
-			Object result = evaluate(command);
+		public void printAndExecute(String command) {
+			Object result = safeEvaluate(command);
 			System.out.println(command+" -> "+
 					((result instanceof Integer) ? "(int) " : 
 						(result instanceof Boolean) ? "(bool) " :"(String) ")+result);
 		}
 		
-		public static boolean test(Script script,String command, Object result){
-			Object r = script.evaluate(command);
-			if (result.equals(r)) {
-				System.out.println("OK "+command+" -> " + r);
-				return true;
+		public static boolean test(Script script,String command, Object result) {
+			Object r = script.safeEvaluate(command);
+			if ((result == null && (r != null) )  || (result != null && !result.equals(r))) {
+				System.err.println("ERROR "+command+" -> "+r+" ("+result+")");
+				return false;
 			}
-			System.err.println("ERROR "+command+" -> "+r+" ("+result+")");
-			return false;
+				System.out.println("OK "+command+" -> " + r);
+				return true;			
+			
 		}
 		
 
 		//regression tests
 		public static void main(String[] arg){
 			Script script = new Script();
+			
 			test(script,"\"hello world\"","hello world");
 			test(script,"2+2",4);
 			test(script,"a=2;a+a",4);
@@ -741,6 +822,11 @@ public class Script {
 			
 			System.out.println(script.getVarMap().equals(copy.getVarMap()));
 			
+			test(script,"=5*2",null);
+			test(script,"a=5+*2",null);
+			test(script,"a+2=5+2",null);
+			test(script,"\"dgfsdfgdfgdfgsdfg",null);			
+			test(script,"2.5+3",null);
 		}
 }
 
