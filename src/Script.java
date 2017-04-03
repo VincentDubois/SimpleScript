@@ -307,10 +307,12 @@ public class Script {
 				int end = current;
 				globbleSpace();
 				int parseInt = -1;
+				String substring = string.substring(start,end);
+				if (substring.length() == 0) return 0; // TODO
 				try {
-					parseInt = Integer.parseInt(string.substring(start,end));
+					parseInt = Integer.parseInt(substring);
 				} catch (NumberFormatException e){
-					error("Error parsing int value '"+string.substring(start,end)+"'",e);
+					error("Error parsing int value '"+substring+"'",e);
 				}
 				return parseInt;			
 			}
