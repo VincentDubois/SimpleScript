@@ -865,9 +865,11 @@ public class Script {
 				}});
 
 			test(script,"$length('test')",4);
+			test(script,"$length(d)",4);
+			test(script,"$length($status)",27);
 			
 			test(script,"=5*2",null);
-			test(script,"a=5+*2",null);
+			test(script,"a=5+*2",5);
 			test(script,"a+2=5+2",null);
 			test(script,"\"dgfsdfgdfgdfgsdfg",null);			
 			test(script,"2.5+3",null);
