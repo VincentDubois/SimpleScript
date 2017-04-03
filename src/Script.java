@@ -46,6 +46,10 @@ import java.util.Map;
  * 
  */
 public class Script {
+	
+	public interface Action {		
+		Object execute(Object parameter);
+	} 
 
 	// character type used
 	public static enum TYPE {DIGIT,LETTER,SPACE,
@@ -338,7 +342,16 @@ public class Script {
 
 				globbleSpace();
 				if (accept(TYPE.EVALUATE)){ // interprets variable as a program
-					result = evaluate(String.valueOf((get(readIdent()))));					
+					String name = readIdent();
+					if (accept(TYPE.L_PAR)){
+						Object param = readStatement();
+						globbleSpace();
+						expect(TYPE.R_PAR);
+						globbleSpace();
+						result = Script.this.call(name,param);
+					} else {
+						result = evaluate(String.valueOf((get(name))));											
+					}
 				} else if (check(TYPE.LETTER)) { // get variable value
 					result =  get(readIdent());
 				} else if (accept(TYPE.L_PAR)) { // handle parenthesis 
@@ -620,6 +633,7 @@ public class Script {
 
 		//Variables store
 		private Map<String,Object> var;
+		private Map<String,Action> action;
 
 
 		// Constructors
@@ -627,6 +641,17 @@ public class Script {
 		
 		public Script(){
 			var = new HashMap<String, Object>();
+			action = new HashMap<String,Action>();
+		}
+
+		public void bind(String name, Action action){
+			this.action.put(name,action);
+		}
+		
+		public Object call(String name, Object param) {
+			Action a = action.get(name);
+			if (a == null) return null;			
+			return a.execute(param);
 		}
 
 		public Script(String command) {
@@ -821,6 +846,15 @@ public class Script {
 			Script copy = new Script(s);
 			
 			System.out.println(script.getVarMap().equals(copy.getVarMap()));
+			
+			script.bind("zero", new Action(){
+				@Override
+				public Object execute(Object parameter) {
+					return 0;
+				}});
+			
+			test(script,"$zero(1)",0);
+			test(script,"$zero()",0);
 			
 			test(script,"=5*2",null);
 			test(script,"a=5+*2",null);
