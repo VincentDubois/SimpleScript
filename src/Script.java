@@ -858,6 +858,14 @@ public class Script {
 			test(script,"$zero(1)",0);
 			test(script,"$zero()",0);
 			
+			script.bind("length", new Action(){
+				@Override
+				public Object execute(Object parameter) {
+					return parameter.toString().length();
+				}});
+
+			test(script,"$length('test')",4);
+			
 			test(script,"=5*2",null);
 			test(script,"a=5+*2",null);
 			test(script,"a+2=5+2",null);
